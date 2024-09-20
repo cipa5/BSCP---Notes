@@ -1,7 +1,7 @@
 # BSCP---Notes
 Notes and Additional Payloads for Web Application Vulnerabilities Topics covered in PortSwigger Academy
-~This is just another Notes Repo for the BSCP Exam, I hope you will find it helpful. For some Topics, I have additional payloads and notes that go beyond BSCP Exam but I decided to include them if somebody is interested in those~
-~Topics covered in this Repo are not listed by importance or in order like in PortSwigger Academy~
+~~~This is just another Notes Repo for the BSCP Exam, I hope you will find it helpful. For some Topics, I have additional payloads and notes that go beyond BSCP Exam but I decided to include them if somebody is interested in those~~~
+~~~Topics covered in this Repo are not listed by importance or in order like in PortSwigger Academy~~~
 ```
           _____                    _____                    _____                    _____          
          /\    \                  /\    \                  /\    \                  /\    \         
