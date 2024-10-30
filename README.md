@@ -174,3 +174,37 @@ ChangeEmailInput%21%29+%7B%0A++++++++changeEmail%28input%3A+%24input%29+%
 changeEmail&variables=%7B%22input%22%3A%7B%22email%22%3A%22hacker%40hacker.com%22%7D%7D
 ```
 As we can see Query doesn't have CSRF protection and the applications allow POST request via x-www-form-urlencoded as a Content-Type which makes CRSF exploitable and we can deliver this payload to the victim.
+
+### Path Traversal
+Path Traversal attack allows us to read local files on a remote system which can include:
+		○ Application code and data. 
+		○ Credentials for back-end systems. 
+		○ Sensitive operating system files. 
+
+For Portswigger Labs It's important to find a parameter that might be vulnerable to path traversal such as ```filename=? ``` Which is pulling files from the web server itself.
+
+## Exploitation
+**1)** When there is no Defense(filtering) in place we can try either of these 2 payloads as /etc/passwd and \windows\win.ini are present on most Windows and Unix systems:
+
+``` ../../../etc/passwd  ``` --> Linux
+
+OR 
+
+``` ..\..\..\windows\win.ini ``` --> Windows
+
+**2)** Using absolute path: sometimes filtering will be in place and ``` ../ ``` will be stripped out, in that case, we can try using an absolute path to retrieve files such as: 
+	``` ?filename=/etc/passwd ```
+ 
+**3)** Using Nested Traversal Sequences --> sometimes defense in place will only strip out ``` ../ ``` **non-recursively**, which leaves the room to use nested sequences such as ```....// ``` ; which we can use to build the payload such as:
+ ``` ....//....//....//etc/passwd ```
+ 
+**4)** Sometimes, in URL path if we try to pass ../ web server may strip out our payload as it's known payload for path/directory traversal before passing it to the application. We can bypass this by **URL Encoding** ../ value or even d**ouble URL Encoding**. Sometimes less common URL encoding techniques such as ``` ..%c0%af ``` works as well. For this approach simply use Burp's feature to quickly URL or Double URL Encode payload for Path Traversal.
+
+**5)** Sometimes the app will require an expected base folder such as ``` /var/www/images ``` for getting files from the system. If this is the case we can pass the required base folder and then escape from it as: 
+```/var/www/images/../../../etc/passwd``` (where /var/www/images is required base path for an example)
+
+**6)** **Null-Byte**: If the application is expecting a specific extension such as .png we can bypass that by passing the payload which will include a null byte if the app allows that ``` ../../../etc/passwd%00.jpg ``` ---> everything after null byte is ignored but it's sufficient for us to bypass the check where the app is looking in this case for _.jpg_ extension
+
+
+
+
