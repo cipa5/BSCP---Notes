@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/064cbc2a-1c16-42f3-b511-e7dda66012ac)# BSCP---Notes
+# BSCP---Notes
 Notes and Additional Payloads for Web Application Vulnerabilities Topics covered in PortSwigger Academy
 
 *This is just another Notes Repo for the BSCP Exam. I hope you will find it helpful. For some topics, I have additional payloads and notes that go beyond the BSCP Exam, but I decided to include them if someone is interested.*
