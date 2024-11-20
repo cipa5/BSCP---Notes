@@ -326,3 +326,71 @@ Now when the user navigates to our malicious website and performers click action
 <iframe src="https://<YOUR_LAB_ID>.web-security-academy.net/my-account"></iframe>
 ```
 In this case we are ticking the victim 2 times so that is why we have 2 div elements, with 2 different classes depending on the CSS adjustment needs.
+
+### Information Disclosure
+Information Disclosure can be:
+	1)Data about other users.
+	2)Sensitive business data such as credit card numbers.
+	3)Technical details about the website and its infrastructure.
+Examples of Information Disclosure:
+	-revealing hidden directories in robots.txt and sitemap.xml file
+	-providing access to the source code via temporary backups
+	-explicitly mentioning database table or column name in error messages
+	-exposing highly sensitive information such as credit card numbers
+	-hard-coding sensitive information in the source code such as API keys, IP Addresses, database creds, etc.
+	-overly verbose error messages indicating the framework, template, database type or the server that the website is using
+
+## Exploitation
+
+**1)** When we see parameters being passed in our Request either GET or POST we can play with that parameter, try changing its value from integer to string for example, or try changing the request method in order to trigger a verbose error message that can reveal more details about technologies behind the scenes.
+
+**2)** Developers sometimes forget to remove comments from the source code that can point out to sensitive information. We can manually try to find them via developer's tools in the source code, or we can navigate to Burp then **right-click** on **Target Tab** -> **Site Map** -> **Engagement Tools** -> **Find Comments**
+
+**3)** Sometimes developers forget to remove the option for debugging data in production that is logged into a separate file on the server. We can try to fuzz for debugging files with a filenames list from the base (root) directory of the website.
+
+**4)** we can try fuzzing for hidden directories that might refer back to a forgotten **backup file(.bak)** that can leak the source code
+
+**5)** By changing the request method to the **TRACE** application can reveal sensitive information such as internal headers used for the **authentication** in Response. That is  because the **TRACE method** is used for debugging purposes and it will echo back our Request in the response alongside sensitive information. 
+For example, if we send TRACE request to / endpoint and we get in response:
+```
+X-Custom-IP-Authorization: 172.14.225.115
+```
+but when we try to access **/admin** endpoint we get an error message saying that is only available _to local users_ , that means we can pass that X-Custom-IP-Authorization header and set it to 127.0.0.1 when we try to access the /admin endpoint as we know now thanks to the TRACE method being enabled, that X-Custom-IP-Authorization header is being used for Access Control. Since the error message mentioned that _admin portal is only accessible for local users_ we can **spoof** X-Custom-IP-Authorization header in this instanace and setting to the local host, ultimately bypassing this access control method.
+
+**6)** If the website is using Git for version control developers might forget to remove the .git directory from production. We can simply try to navigate to ./git or we can make a use of DotGit extension in Firefox (https://addons.mozilla.org/en-US/firefox/addon/dotgit/) - One thing about the DotGit extension is that sometimes it works pefrctly but sometimes completely misses that there is git directory - _something to be aware of_ . Once when we identified that .git directory is present on the target website we need to download it:
+
+I have 3 approaches for doing so:
+
+**6.1)** The most convenient way to do so that I learned while preparing for OSCP is to use **git dumper tool** that can be found here: https://github.com/arthaud/git-dumper
+Syntax to run it:
+```python3 git_dumper.py http://<TARGET_WEBSITE>/.git /tmp/git-result```
+
+**6.2)** Use DotGit Extension by simply clicking **download** once when the extension identifies .git directory
+      	
+**6.3)** Use **wget** :
+```wget -r https://YOUR-LAB-ID.web-security-academy.net/.git/``` 
+_This will save .git directory in our current directory_
+   
+Once when we have .git locally it's time to enumerate it more closely to find credentials, API keys, etc. If you are familiar with the CTF Styles machines, it's pretty much the same. PortSwigger in its course suggests using **git cola** tool, so I will go over it first:
+
+**1)** -Once when we download the directory we can use git cola (launch it by typing git cola in the terminal)We can then upload the downloaded file--> Commit--> Undo Last Commit --> and then by clicking on the commit that appeared in the Diff tab we should be seeing differences between commits that can expose sensitive information. - _Quick note about Git Cola for Mac Users_ : sometimes I find it working perfeclty but sometimes I can't get it to load the .git directory, so I suggest running git cola from the Linux VM.
+
+**2)** If you don't like git cola, we can use native git tools, which I also prefer when playing CTF Style machines, it's fast way for checking for juicy things and we only need **git** for it which we already have it installed
+
+**2.1)** First to validate if everything is okay with downloaded repo we can run
+	```git status```
+ 
+**2.2)** Then we can restore all the changes by using: 
+	```git checkout -- . OR git restore .```
+ 
+**2.3)** What I like to do more is to check for the **commits** :
+```git log```
+
+From here we can see **commit message** and we can also display **what happened in each commit** by using: (Most of the time we are interested in the commit message related to security, so check the Description of the commit carefully )
+     
+Finally, we can inspect more closely what happened in certain commits:
+```git show <COMMIT_ID>``` --> COMMIT_IDs will be returned in command from **2.3)**
+     
+
+
+
