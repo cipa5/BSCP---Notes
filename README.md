@@ -438,7 +438,92 @@ In this lab we also identified Open-Redirection Vulnerability which can help us 
 ```StockAPI=/product/nextProduct?currentProductId=3&path=http://192.168.0.12:8080/admin```
 
 
+# API Testing
+First, we need to obtain as much information about the API endpoints as possible, so enumeration is key once again. Enum,enum,enum.
+Once we identify all endpoints we should learn more about them such as what type of HTTP requests are accepting, or whether there is any authentication mechanism in place, etc.
+If API has documentation that is a great place to learn more about the API itself since we can see listed endpoints, and sample requests. But we shouldn't solely rely on Documentation, maybe something is left from the documentation.
 
 
 
+## Exploitation
 
+**1)** If API doesn't have documentation publicly available we can try to look for endpoints that may refer to documentation such as:
+				□ /api
+    
+				□ /swagger/index.html
+    
+				□ /openapi.json
+
+Fuzzing for directories is also very useful here with both Burp or other tools such as _ffuf_ as we might find API documentation exposed, or maybe other API endpoints that are left out from the documentation.
+
+**2)** Once when we identify all API endpoints it's time to enumerate them closely. It's important to try different HTTP Requests Methods to see how the API endpoint behaves and how it handles errors.  In response sometimes the application will return **Allow Header** that will indicate what HTTP methods are valid!
+
+In the lab example we can send a GET request to ```/api/products/2/price```, but when testing the behavior and error handling of an API endpoint by sending a POST Request instead of a GET Request we can see that **Allow Header** is returned to us in Response indicating that only GET & PATCH HTTP Requests Methods are allowed. This is particularly interesting as PATCH method is used for updating, and we wouldn't know about it otherwise. With this knowledge instead of a GET Request we can send a PATCH Request and update the price of a product to be $0.00 and buy the product for free!
+
+**3)** Enumerate API Responses for any additional fields being returned that we can leverage for Mass Assignment vulnerability by passing additional fields to certain API endpoints.
+Consider this example:
+
+_GET Request to /api/checkout_
+
+```
+		  {
+		  "chosen_discount": {
+		    "percentage": 0
+		  },
+		  "chosen_products": [
+		    {
+		      "product_id": "1",
+		      "name": "Lightweight \"l33t\" Leather Jacket",
+		      "quantity": 1,
+		      "item_price": 133700
+		    }
+		  ]
+		}
+```
+
+By sending this GET Request we are adding certain product to the Checkout Cart, here we can see that there is also _choosen_discount_ parameter being returned, which we don't see in the POST Request when we check out. This is perfect example to test for Mass Assignment vulnerability, by taking Original Request and adding additional parameters to it:
+
+_POST Request to /api/checkout - exploiting leveraging mass assignment:_
+
+```
+		  {
+		  "chosen_discount": {
+		    "percentage": 100
+		  },
+		  "chosen_products": [
+		    {
+		      "product_id": "1",
+		      "quantity": 1
+		    }
+		  ]
+		}
+```
+Here we set _percentage_ key with the value of 100 to get the product for free.
+
+
+**4)** The last thing to check for is parameter pollution! Which is appending additional parameters with **&** or using **#** to comment out the rest of the query. Parameter Pollution is very interesting vulnerability as our user-controlled input might be passed to Internal **only** API Endpoint, that we are not able to reach. By passing additional parameters with special characters such as & or # to comment out rest of the API call that is happening behind the scenes we might be able to extract more information than we should be able to. As an example:
+Imagine that our user input goes into the query such as:
+
+```GET /userSearch?name=peter&back=/home```
+
+Our input might end up in the API Call such as:
+
+```GET /users/search?name=peter&publicProfile=true```
+
+Now if we add & character to it and specify another name parameter we might be able to retrieve the information about another user as well (depending on the Technology being used as well as API Configuration):
+
+```GET /users/search?name=peter&name=carlos&publicProfile=true```
+
+**4.1)** Parameter Pollution can be also applied in REST APIs where user input might also be passed to the private API on the Server-Side but with the REST API user input is not being passed in the query, but rather as a part of the path:
+
+Imagine that our user input from front-end:
+
+```GET /edit_profile.php?name=peter```
+
+Goes to the REST API Server-Side as:
+
+```GET /api/private/users/peter```
+
+   We can try to exploit parameter pollution by adding **path traversal** such as _../admin_ and if the application **normalize** the path we might be just able to retrieve information about the admin user in this instance. So essentially ```GET /edit_profile.php?name=peter%2f..%2fadmin``` will become ```GET /api/private/users/peter/../admin``` thanks to normalization app will resolve it as   ```GET /api/private/users/admin```
+
+ 
