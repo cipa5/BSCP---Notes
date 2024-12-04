@@ -677,3 +677,42 @@ We can exfiltrate the data by using **Blind Command Injection** in multiple ways
 
 With this command, we will receive a DNS lookup to Burp Collaborator with ```whoami``` command executed as a 'subdomain' of Collaborator's domain!
 
+
+# Access Control Vulnerabiliites
+
+An access control vulnerability occurs when users can access resources or perform actions beyond their intended permissions.
+
+## Exploitation
+
+**1)** If the application doesn't enforce any protection for sensitive functions (meaning that they are available to any user role) we can access directly admin panel OR, we can try checking robots.txt or fuzz for hidden web directories in order to find a hidden admin panel
+
+**2)** Sometimes sensitive functions such as admin panel will be hidden from us by using unpredictable URL such as ```admin-panely6557```, we can still manage to find sensitive functionalities(such as admin-panel) by searching in the JavaScript code (View Source in DevTools to expect the Soure Code) that might reveal the hidden URL. Burp will be also able to find this one automatically, check the site's structure in the Target Tab in Burp Suite as Burp will automatically add different endpoints to site's structure.
+
+**3)** Parameter-based access control methods can be very vulnerable because they can be **user-controllable**.
+	**3.1)** If the application is solely relying on the cookie whether a user is an admin or not, we can intercept that request and change the cookie value to ```Admin:True``` for example
+ 	**3.2)** if the application is solely relying on "role" as a JSON parameter whether a user is admin or not, we can try to change the role of a user by changing anything(POST Request) in the user profile(email, username, password) and passing additional role JSON parameter with it. Think about this scenario as of the **Mass Assignment Vulnerability**
+
+**4)** Some applications block accessing specific URLs based on the user roles. We can try to bypass this by using ```X-Original-URL```, because application on the front-end might be well protected, but the back-end might allow usage of this dangerous header. This header is rewriting the original URL that we are requesting to the one we specify in its value. 
+
+Example --> if we try to access /admin we will get Access Denied but if we navigate to /(home page) and append X-Original-URL and set it to /admin app will return /admin page in its response because we just overwrite the the original URL (/)
+
+**5)** We can try to access/perform actions on the restricted URL by changing the **Request Method**, that way we might be able to bypass the access control.
+Example --> if the app allows admins to send POST Request on ```/admin-roles``` with parameters as ```username=calors&action=upgrade```, we can try to send the same request with different Request Method(GET) just by providing parameters in the URL rather then in the Body(POST)
+
+**6)** Check for **IDOR**
+
+**7)** Sometimes app will use GUID which will prevent an attacker from guessing or predicting another user's identifier which makes IDOR much more harder to exploit. But, GUIDS of other users might be disclosed somewhere else in the app, enumerating everything closely.
+
+**8)** Sometimes app does detect when we are not permitted to view information and resources of other users with IDOR by redirecting us to another page, but it can provide sensitive information (information disclosure) in that redirect that we can see in Burp's Repeater by replaying the Request and enumerating the redirection flow.
+
+**9)** Sometimes apps perform sensitive functions over series of steps. If only one step in this chain doesn't have proper access control, the whole process can be bypassed.
+_Example_ --> Imagine a website where access controls are correctly applied to the first and second steps, but not to the third step. The website assumes that a user will only reach step 3 if they have already completed the first steps, which are properly controlled. An attacker can gain unauthorized access to the function by skipping the first two steps and directly submitting the request for the third step with the required parameters.
+
+**10)** Application can have very strict access control over sensitive endpoints such as /admin but if the application is relying only on ```Referrer Header``` for its subpages such as /```admin/deleteUser``` we can trick the application since Referrer Header is **user-controllable** input and set it to /admin for example as the back-end will assume that the Request is coming from /admin endpoint meaning that we are authorized user when we are actually not.
+
+
+
+
+
+
+
